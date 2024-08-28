@@ -1,0 +1,222 @@
+---
+params:
+  site: "http://www.marekp.cz/"
+  country: cze
+title: "SEO Dashboard for {{< meta params.site >}}"
+format:
+  dashboard:
+    embed-resources: true
+---
+
+```{r}
+#| label: setup
+#| include: false
+
+library(tidyverse)
+library(searchConsoleR)
+library(gt)
+
+options(lubridate.week.start = 1)
+
+searchConsoleR::scr_auth(email = Sys.getenv("MY_GOOGLE_ACCOUNT"))
+
+period_length <- 7 # in days, should be a multiple of 7
+n_periods <- 12 # number of periods in the line charts
+
+```
+
+
+```{r}
+#| label: fetch_data
+#| include: false
+
+dim_filter <- if(is.null(params$country)) {
+  NULL
+} else {
+  paste0("country==", params$country)
+}
+
+
+sc_last_period <- search_analytics(
+  siteURL = params$site,
+  startDate = today() - (period_length + 2),
+  endDate = today() - 3,
+  dimensionFilterExp = dim_filter
+)
+
+sc_previous_period <- search_analytics(
+  siteURL = params$site,
+  startDate = today() - (period_length + 2) - period_length,
+  endDate = today() - 3 - period_length,
+  dimensionFilterExp = dim_filter
+)
+
+sc_period_year_ago <- search_analytics(
+  siteURL = params$site,
+  startDate = today() - (period_length + 2) - years(1),
+  endDate = today() - 3 - years(1),
+  dimensionFilterExp = dim_filter
+)
+
+sc_date_last_n_periods <- search_analytics(
+  siteURL = params$site,
+  startDate = today() - 3 - period_length * n_periods + 1,
+  endDate = today() - 3,
+  dimensions = "date",
+  dimensionFilterExp = dim_filter
+)
+
+sc_date_n_periods_year_ago <- search_analytics(
+  siteURL = params$site,
+  startDate = today() - 3 - period_length * n_periods + 1 - (52 * 7),
+  endDate = today() - 3 - (52 * 7),
+  dimensions = "date",
+  dimensionFilterExp = dim_filter
+)
+
+```
+
+
+## Key Numbers
+
+
+```{r}
+#| content: valuebox
+
+diff <- sc_last_period$clicks - sc_previous_period$clicks
+pct <- vec_fmt_percent(diff / sc_previous_period$clicks, decimals = 0)
+
+list(
+  title = "Clicks WoW",
+  color = ifelse(diff < 0, "danger", "success"),
+  icon = ifelse(diff < 0, "arrow-down-right-square-fill", "arrow-up-right-square-fill"),
+  value = pct
+)
+
+```
+
+```{r}
+#| content: valuebox
+
+diff <- sc_last_period$clicks - sc_period_year_ago$clicks
+pct <- vec_fmt_percent(diff / sc_period_year_ago$clicks, decimals = 0)
+
+list(
+  title = "Clicks YoY",
+  color = ifelse(diff < 0, "danger", "success"),
+  icon = ifelse(diff < 0, "arrow-down-right-square-fill", "arrow-up-right-square-fill"),
+  value = pct
+)
+
+```
+
+
+```{r}
+#| content: valuebox
+
+diff <- sc_last_period$impressions - sc_previous_period$impressions
+pct <- vec_fmt_percent(diff / sc_previous_period$impressions, decimals = 0)
+
+list(
+  title = "Impressions WoW",
+  color = ifelse(diff < 0, "danger", "success"),
+  icon = ifelse(diff < 0, "arrow-down-right-square-fill", "arrow-up-right-square-fill"),
+  value = pct
+)
+
+```
+
+```{r}
+#| content: valuebox
+
+diff <- sc_last_period$impressions - sc_period_year_ago$impressions
+pct <- vec_fmt_percent(diff / sc_period_year_ago$impressions, decimals = 0)
+
+list(
+  title = "Impressions YoY",
+  color = ifelse(diff < 0, "danger", "success"),
+  icon = ifelse(diff < 0, "arrow-down-right-square-fill", "arrow-up-right-square-fill"),
+  value = pct
+)
+
+```
+
+
+## Grafy
+
+```{r}
+
+sc_date_last_n_periods |> 
+  mutate(interval = (as.numeric(date - min(date)) %/% period_length) + 1) |> 
+  group_by(interval) |> 
+  summarise(
+    start_date = min(date),
+    now = sum(clicks)
+  ) |> 
+  mutate(
+    `year ago` = sc_date_n_periods_year_ago |> 
+      mutate(interval = (as.numeric(date - min(date)) %/% period_length) + 1) |> 
+      group_by(interval) |> 
+      summarise(
+        clicks = sum(clicks)
+      ) |> 
+      pull(clicks)
+  ) |> 
+  pivot_longer(cols = now:`year ago`) |> 
+  ggplot(aes(x = start_date, y = value)) +
+  geom_line(aes(linetype = name, color = name), linewidth = 1) +
+  geom_point(aes(color = name), size = 3) +
+  scale_linetype_manual(values = c("solid", "dotted")) +
+  scale_color_manual(values = c("darkgreen", "#999999")) +
+  scale_x_date(labels = scales::label_date_short()) +
+  scale_y_continuous(labels = scales::label_number()) +
+  labs(
+    y = "Clicks",
+    x = NULL
+  ) +
+  theme_minimal() +
+  theme(
+    legend.position = "bottom",
+    legend.title = element_blank()
+  )
+
+```
+
+
+```{r}
+
+sc_date_last_n_periods |> 
+  mutate(interval = (as.numeric(date - min(date)) %/% period_length) + 1) |> 
+  group_by(interval) |> 
+  summarise(
+    start_date = min(date),
+    now = sum(impressions)
+  ) |> 
+  mutate(
+    `year ago` = sc_date_n_periods_year_ago |> 
+      mutate(interval = (as.numeric(date - min(date)) %/% period_length) + 1) |> 
+      group_by(interval) |> 
+      summarise(
+        impressions = sum(impressions)
+      ) |> 
+      pull(impressions)
+  ) |> 
+  pivot_longer(cols = now:`year ago`) |> 
+  ggplot(aes(x = start_date, y = value)) +
+  geom_line(aes(linetype = name, color = name), linewidth = 1) +
+  geom_point(aes(color = name), size = 3) +
+  scale_linetype_manual(values = c("solid", "dotted")) +
+  scale_color_manual(values = c("darkgreen", "#999999")) +
+  scale_x_date(labels = scales::label_date_short()) +
+  scale_y_continuous(labels = scales::label_number()) +
+  labs(
+    y = "Impressions",
+    x = NULL
+  ) +
+  theme_minimal() +
+  theme(
+    legend.position = "bottom",
+    legend.title = element_blank()
+  )
+
+```
