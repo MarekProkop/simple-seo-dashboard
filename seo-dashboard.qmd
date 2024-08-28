@@ -145,78 +145,60 @@ list(
 ## Grafy
 
 ```{r}
+#| label: chart function
 
-sc_date_last_n_periods |> 
-  mutate(interval = (as.numeric(date - min(date)) %/% period_length) + 1) |> 
-  group_by(interval) |> 
-  summarise(
-    start_date = min(date),
-    now = sum(clicks)
-  ) |> 
-  mutate(
-    `year ago` = sc_date_n_periods_year_ago |> 
-      mutate(interval = (as.numeric(date - min(date)) %/% period_length) + 1) |> 
-      group_by(interval) |> 
-      summarise(
-        clicks = sum(clicks)
-      ) |> 
-      pull(clicks)
-  ) |> 
-  pivot_longer(cols = now:`year ago`) |> 
-  ggplot(aes(x = start_date, y = value)) +
-  geom_line(aes(linetype = name, color = name), linewidth = 1) +
-  geom_point(aes(color = name), size = 3) +
-  scale_linetype_manual(values = c("solid", "dotted")) +
-  scale_color_manual(values = c("darkgreen", "#999999")) +
-  scale_x_date(labels = scales::label_date_short()) +
-  scale_y_continuous(labels = scales::label_number()) +
-  labs(
-    y = "Clicks",
-    x = NULL
-  ) +
-  theme_minimal() +
-  theme(
-    legend.position = "bottom",
-    legend.title = element_blank()
-  )
+plot_metric_comparison <- function(sc_date_last_n_periods, sc_date_n_periods_year_ago, metric, period_length) {
+  
+  sc_date_last_n_periods |> 
+    mutate(interval = (as.numeric(date - min(date)) %/% period_length) + 1) |> 
+    group_by(interval) |> 
+    summarise(
+      start_date = min(date),
+      now = sum({{ metric }})
+    ) |> 
+    mutate(
+      `year ago` = sc_date_n_periods_year_ago |> 
+        mutate(interval = (as.numeric(date - min(date)) %/% period_length) + 1) |> 
+        group_by(interval) |> 
+        summarise(
+          past_metric = sum({{ metric }})
+        ) |> 
+        pull(past_metric)
+    ) |> 
+    pivot_longer(cols = now:`year ago`) |> 
+    ggplot(aes(x = start_date, y = value)) +
+    geom_line(aes(linetype = name, color = name), linewidth = 1) +
+    geom_point(aes(color = name), size = 3) +
+    scale_linetype_manual(values = c("solid", "dotted")) +
+    scale_color_manual(values = c("darkgreen", "#999999")) +
+    scale_x_date(labels = scales::label_date_short()) +
+    scale_y_continuous(labels = scales::label_number()) +
+    labs(
+      y = rlang::as_string(rlang::ensym(metric)),
+      x = NULL
+    ) +
+    theme_minimal() +
+    theme(
+      legend.position = "bottom",
+      legend.title = element_blank()
+    )
+}
 
 ```
 
 
 ```{r}
+#| label: clicks chart
 
-sc_date_last_n_periods |> 
-  mutate(interval = (as.numeric(date - min(date)) %/% period_length) + 1) |> 
-  group_by(interval) |> 
-  summarise(
-    start_date = min(date),
-    now = sum(impressions)
-  ) |> 
-  mutate(
-    `year ago` = sc_date_n_periods_year_ago |> 
-      mutate(interval = (as.numeric(date - min(date)) %/% period_length) + 1) |> 
-      group_by(interval) |> 
-      summarise(
-        impressions = sum(impressions)
-      ) |> 
-      pull(impressions)
-  ) |> 
-  pivot_longer(cols = now:`year ago`) |> 
-  ggplot(aes(x = start_date, y = value)) +
-  geom_line(aes(linetype = name, color = name), linewidth = 1) +
-  geom_point(aes(color = name), size = 3) +
-  scale_linetype_manual(values = c("solid", "dotted")) +
-  scale_color_manual(values = c("darkgreen", "#999999")) +
-  scale_x_date(labels = scales::label_date_short()) +
-  scale_y_continuous(labels = scales::label_number()) +
-  labs(
-    y = "Impressions",
-    x = NULL
-  ) +
-  theme_minimal() +
-  theme(
-    legend.position = "bottom",
-    legend.title = element_blank()
-  )
+plot_metric_comparison(sc_date_last_n_periods, sc_date_n_periods_year_ago, clicks, period_length)
 
 ```
+
+
+```{r}
+#| label: impressions chart
+
+plot_metric_comparison(sc_date_last_n_periods, sc_date_n_periods_year_ago, impressions, period_length)
+
+```
+
